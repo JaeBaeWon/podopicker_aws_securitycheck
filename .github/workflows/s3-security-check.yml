@@ -1,0 +1,44 @@
+name: 🔐 Daily S3 Security Check
+
+on:
+  schedule:
+    - cron: '0 23 * * *'  # 한국 기준 오전 8시
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    env:
+      # S3 버킷 이름
+      BUCKET_NAME: podopicker-static
+
+      # 대표 CloudFront 도메인
+      CF_URL: https://www.podopicker.store
+
+      # CloudFront 배포 ID
+      DIST_ID: EKBBK4D1CTWHQ
+
+      # AWS 계정 ID (12자리 숫자)
+      ACCOUNT_ID: 639965457439
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Install required CLI tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Run S3 security check script
+        run: |
+          chmod +x ./scripts/s3_security_check.sh
+          ./scripts/s3_security_check.sh
