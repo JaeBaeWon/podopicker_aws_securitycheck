@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # ===== 설정 =====
-BUCKET_NAME="${BUCKET_NAME:podopicker-web-s3}"
+BUCKET_NAME="${BUCKET_NAME:-podopicker-web-s3}"
 CF_URL="${CF_URL:-https://www.podopicker.store}"
 DIST_ID="${DIST_ID:-EKBBK4D1CTWHQ}"
 ACCOUNT_ID="${ACCOUNT_ID:-639965457439}"
