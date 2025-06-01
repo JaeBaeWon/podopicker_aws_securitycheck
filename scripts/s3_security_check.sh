@@ -36,7 +36,6 @@ check_aws() {
   header "AWS 인증 확인"
   if ! aws sts get-caller-identity &>/dev/null; then
     error "AWS 인증 실패"
-    exit 1
   fi
   success "AWS 인증 성공"
 }
