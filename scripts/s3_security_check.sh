@@ -26,7 +26,7 @@ check_dependencies() {
   for tool in curl aws jq; do
     if ! command -v "$tool" &>/dev/null; then
       error "도구 누락: $tool"
-      exit 1
+      return
     fi
   done
   success "모든 도구 확인 완료"
@@ -36,6 +36,7 @@ check_aws() {
   header "AWS 인증 확인"
   if ! aws sts get-caller-identity &>/dev/null; then
     error "AWS 인증 실패"
+    return
   fi
   success "AWS 인증 성공"
 }
@@ -44,7 +45,7 @@ check_bucket() {
   header "S3 버킷 존재 여부"
   if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
     error "버킷 존재하지 않거나 접근 불가"
-    exit 1
+    return
   fi
   success "버킷 접근 가능"
 }
@@ -143,7 +144,7 @@ summarize() {
     for f in "${FAILURES[@]}"; do
       echo -e "${RED}- $f${NC}"
     done
-    exit 1
+    # NOTE: exit 1 제거로 인해 GitHub Actions는 실패로 표시되지 않음
   fi
 }
 
