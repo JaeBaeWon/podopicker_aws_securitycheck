@@ -42,3 +42,29 @@ jobs:
         run: |
           chmod +x ./scripts/s3_security_check.sh
           ./scripts/s3_security_check.sh
+
+      - name: Run S3 security check script
+        run: |
+          chmod +x ./scripts/s3_security_check.sh
+          ./scripts/s3_security_check.sh
+
+      - name: 📖 Read summary for email
+        id: readfile
+        run: |
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          cat daily_summary.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: 📬 Send Daily Email Report
+        uses: dawidd6/action-send-mail@v5
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "📬 PoPoPicker 보안 점검 리포트"
+          to: jinhyunpark929@gmail.com
+          from: "PoPoPicker Bot <${{ secrets.EMAIL_USERNAME }}>"
+          content_type: text/plain
+          body: |
+            ${{ steps.readfile.outputs.content }}
