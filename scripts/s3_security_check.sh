@@ -42,12 +42,13 @@ check_aws() {
 }
 
 check_bucket() {
-  header "S3 버킷 존재 여부"
-  if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
-    error "버킷 존재하지 않거나 접근 불가"
-    return
+  header "S3 버킷 접근 제한 여부 확인"
+
+  if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+    warn "❗ 버킷에 직접 접근이 가능합니다 (의도된 차단이 안 됨)"
+  else
+    success "✅ 버킷에 직접 접근이 차단되어 있습니다 (정상)"
   fi
-  success "버킷 접근 가능"
 }
 
 test_s3_access() {
@@ -99,27 +100,45 @@ test_header_attacks() {
 
 check_bucket_config() {
   header "S3 보안 설정 확인"
+
+  # 🚫 정적 웹호스팅 여부
   if aws s3api get-bucket-website --bucket "$BUCKET_NAME" >/dev/null 2>&1; then
     error "정적 웹호스팅 활성화됨"
   else
     success "정적 웹호스팅 비활성화됨"
   fi
 
-  local block=$(aws s3api get-public-access-block --bucket "$BUCKET_NAME" --query 'PublicAccessBlockConfiguration' --output json)
-  if echo "$block" | jq -e '.BlockPublicAcls and .IgnorePublicAcls and .BlockPublicPolicy and .RestrictPublicBuckets' >/dev/null; then
+  # 🔐 퍼블릭 액세스 차단 설정 확인
+  local block=$(aws s3api get-public-access-block --bucket "$BUCKET_NAME" --query 'PublicAccessBlockConfiguration' --output json 2>/dev/null)
+
+  if [ -z "$block" ] || [ "$block" = "null" ]; then
+    warn "⚠️ 퍼블릭 차단 설정 정보를 가져올 수 없습니다 (권한 부족 또는 미설정 가능성)"
+  elif echo "$block" | jq -e '.BlockPublicAcls and .IgnorePublicAcls and .BlockPublicPolicy and .RestrictPublicBuckets' >/dev/null; then
     success "퍼블릭 차단 설정 완료"
   else
-    error "퍼블릭 차단 설정 미흡"
+    warn "퍼블릭 차단 설정 중 일부 누락 (수동 검토 권장)"
   fi
 
-  local policy=$(aws s3api get-bucket-policy --bucket "$BUCKET_NAME" --query 'Policy' --output text 2>/dev/null || echo "")
-  local expect="arn:aws:cloudfront::${ACCOUNT_ID}:distribution/${DIST_ID}"
-  if [[ "$policy" == *"$expect"* ]]; then
+  # 🧾 버킷 정책에 CloudFront OAC 포함 여부
+  local raw_policy=$(aws s3api get-bucket-policy --bucket "$BUCKET_NAME" --query 'Policy' --output text 2>/dev/null || echo "")
+  if [ -z "$raw_policy" ]; then
+    error "OAC 정책 없음 (버킷 정책 자체가 없음)"
+    return
+  fi
+
+  # jq로 정확히 CloudFront OAC 정책이 존재하는지 확인
+  local expect_arn="arn:aws:cloudfront::${ACCOUNT_ID}:distribution/${DIST_ID}"
+  if echo "$raw_policy" | jq -e --arg OAC_ARN "$expect_arn" '
+    fromjson
+    | .Statement[]
+    | select(.Principal.Service == "cloudfront.amazonaws.com")
+    | select(.Action == "s3:GetObject")
+    | select(.Condition.StringEquals."AWS:SourceArn" == $OAC_ARN)
+  ' >/dev/null; then
     success "OAC 연결 정책 존재"
   else
-    error "OAC 정책 누락"
+    error "OAC 정책 누락 또는 ARN 불일치"
   fi
-}
 
 check_cf_config() {
   header "CloudFront 설정 확인"
