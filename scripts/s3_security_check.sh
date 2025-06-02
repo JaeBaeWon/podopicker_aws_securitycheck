@@ -126,7 +126,6 @@ check_bucket_config() {
     return
   fi
 
-  # jq로 정확히 CloudFront OAC 정책이 존재하는지 확인
   local expect_arn="arn:aws:cloudfront::${ACCOUNT_ID}:distribution/${DIST_ID}"
   if echo "$raw_policy" | jq -e --arg OAC_ARN "$expect_arn" '
     fromjson
@@ -139,6 +138,7 @@ check_bucket_config() {
   else
     error "OAC 정책 누락 또는 ARN 불일치"
   fi
+}  # ✅ 누락되었던 중괄호 추가됨
 
 check_cf_config() {
   header "CloudFront 설정 확인"
@@ -157,8 +157,6 @@ check_cf_config() {
 
 summarize() {
   header "점검 요약"
-
-  # ✅ daily_summary.txt 생성
   REPORT="daily_summary.txt"
   echo "📊 [일일 보안 점검 요약] - $(date '+%Y-%m-%d %H:%M:%S')" > "$REPORT"
   echo "" >> "$REPORT"
