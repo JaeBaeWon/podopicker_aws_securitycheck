@@ -138,13 +138,21 @@ check_cf_config() {
 
 summarize() {
   header "점검 요약"
+
+  # ✅ daily_summary.txt 생성
+  REPORT="daily_summary.txt"
+  echo "📊 [일일 보안 점검 요약] - $(date '+%Y-%m-%d %H:%M:%S')" > "$REPORT"
+  echo "" >> "$REPORT"
+
   if [ ${#FAILURES[@]} -eq 0 ]; then
     success "✅ 모든 보안 항목 통과"
+    echo "✅ 모든 보안 항목 통과" >> "$REPORT"
   else
+    echo "❌ 총 ${#FAILURES[@]}건의 항목이 실패했습니다:" >> "$REPORT"
     for f in "${FAILURES[@]}"; do
+      echo "- $f" >> "$REPORT"
       echo -e "${RED}- $f${NC}"
     done
-    # NOTE: exit 1 제거로 인해 GitHub Actions는 실패로 표시되지 않음
   fi
 }
 
