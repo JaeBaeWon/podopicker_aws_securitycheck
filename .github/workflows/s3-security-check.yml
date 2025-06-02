@@ -62,7 +62,7 @@ jobs:
           server_port: 587
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "📬 PoPoPicker 보안 점검 리포트"
+          subject: "📬 PodoPicker 보안 점검 리포트"
           to: jinhyunpark929@gmail.com
           from: "PoPoPicker Bot <${{ secrets.EMAIL_USERNAME }}>"
           content_type: text/plain
