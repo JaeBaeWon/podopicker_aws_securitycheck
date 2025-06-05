@@ -8,47 +8,41 @@ DIST_ID="${DIST_ID:-EKBBK4D1CTWHQ}"
 ACCOUNT_ID="${ACCOUNT_ID:-639965457439}"
 TEST_FILE="${TEST_FILE:-index.html}"
 
-# 색상
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 FAILURES=()
+ERROR_MESSAGES=(); WARN_MESSAGES=(); SUCCESS_MESSAGES=()
+ERROR_COUNT=0; WARN_COUNT=0; SUCCESS_COUNT=0
 
 log()      { echo "[$(date '+%F %T')] $1"; }
-success()  { echo -e "${GREEN}✅ $1${NC}"; log "PASS: $1"; }
-warn()     { echo -e "${YELLOW}⚠️ $1${NC}"; log "WARN: $1"; }
-error()    { echo -e "${RED}❌ $1${NC}"; log "FAIL: $1"; FAILURES+=("$1"); }
+success()  { echo -e "${GREEN}✅ $1${NC}"; log "PASS: $1"; SUCCESS_MESSAGES+=("$1"); SUCCESS_COUNT=$((SUCCESS_COUNT+1)); }
+warn()     { echo -e "${YELLOW}⚠️ $1${NC}"; log "WARN: $1"; WARN_MESSAGES+=("$1"); WARN_COUNT=$((WARN_COUNT+1)); }
+error()    { echo -e "${RED}❌ $1${NC}"; log "FAIL: $1"; ERROR_MESSAGES+=("$1"); ERROR_COUNT=$((ERROR_COUNT+1)); FAILURES+=("$1"); }
 header()   { echo -e "\n${BLUE}=== $1 ===${NC}"; log "=== $1 ==="; }
 
 check_dependencies() {
   header "필수 도구 확인"
   for tool in curl aws jq; do
-    if ! command -v "$tool" &>/dev/null; then
-      error "도구 누락: $tool"
-    fi
+    if ! command -v "$tool" &>/dev/null; then error "도구 누락: $tool"; fi
   done
   success "모든 도구 확인 완료"
 }
 
 check_aws() {
   header "AWS 인증 확인"
-  if ! aws sts get-caller-identity &>/dev/null; then
-    error "AWS 인증 실패"
-  else
-    success "AWS 인증 성공"
-  fi
+  aws sts get-caller-identity &>/dev/null && success "AWS 인증 성공" || error "AWS 인증 실패"
 }
 
 test_cf_access() {
   header "CloudFront 정상 접근 테스트"
-  local url="${CF_URL}/${TEST_FILE}"
-  local code=$(curl -s -o /dev/null -I -w "%{http_code}" "$url")
+  code=$(curl -s -o /dev/null -I -w "%{http_code}" "$CF_URL/$TEST_FILE")
   [ "$code" = "200" ] && success "CloudFront 접근 성공 ($code)" || error "CloudFront 접근 실패 ($code)"
 }
 
 check_cf_config() {
   header "CloudFront 설정 확인"
-  local dist=$(aws cloudfront get-distribution --id "$DIST_ID" --query 'Distribution.DistributionConfig' --output json)
+  dist=$(aws cloudfront get-distribution --id "$DIST_ID" --query 'Distribution.DistributionConfig' --output json)
   [[ "$dist" == "{}" ]] && error "CloudFront 배포 조회 실패" && return
-  local proto=$(echo "$dist" | jq -r '.DefaultCacheBehavior.ViewerProtocolPolicy')
+  proto=$(echo "$dist" | jq -r '.DefaultCacheBehavior.ViewerProtocolPolicy')
   [[ "$proto" =~ https ]] && success "HTTPS 리디렉션 설정 완료 ($proto)" || error "HTTPS 설정 미흡 ($proto)"
 }
 
@@ -66,7 +60,7 @@ test_s3_access() {
     "https://s3.amazonaws.com/${BUCKET_NAME}/${TEST_FILE}"
   )
   for url in "${endpoints[@]}"; do
-    local code=$(curl -s -o /dev/null -I -w "%{http_code}" "$url")
+    code=$(curl -s -o /dev/null -I -w "%{http_code}" "$url")
     case "$code" in
       200) error "$url 접근 가능 (취약)";;
       403|404) success "$url 차단됨 ($code)";;
@@ -77,23 +71,16 @@ test_s3_access() {
 
 test_header_attacks() {
   header "헤더 조작 테스트"
-  local headers=(
-    "Referer: https://evil.com"
-    "Origin: https://attacker.com"
-    "User-Agent: Mozilla/5.0"
-  )
-  for h in "${headers[@]}"; do
-    local result=$(curl -s -I "https://${BUCKET_NAME}.s3.amazonaws.com/${TEST_FILE}" -H "$h")
+  for h in "Referer: https://evil.com" "Origin: https://attacker.com" "User-Agent: Mozilla/5.0"; do
+    result=$(curl -s -I "https://${BUCKET_NAME}.s3.amazonaws.com/${TEST_FILE}" -H "$h")
     echo "$result" | grep -q "200 OK" && error "[$h] 조작 접근 허용됨" || success "[$h] 조작 차단 성공"
   done
 }
 
 check_bucket_config() {
   header "S3 보안 설정 확인"
-  aws s3api get-bucket-website --bucket "$BUCKET_NAME" &>/dev/null \
-    && error "정적 웹호스팅 활성화됨" || success "정적 웹호스팅 비활성화됨"
-
-  local block=$(aws s3api get-public-access-block --bucket "$BUCKET_NAME" --query 'PublicAccessBlockConfiguration' --output json 2>/dev/null)
+  aws s3api get-bucket-website --bucket "$BUCKET_NAME" &>/dev/null && error "정적 웹호스팅 활성화됨" || success "정적 웹호스팅 비활성화됨"
+  block=$(aws s3api get-public-access-block --bucket "$BUCKET_NAME" --query 'PublicAccessBlockConfiguration' --output json 2>/dev/null)
   if [ -z "$block" ] || [ "$block" = "null" ]; then
     warn "퍼블릭 차단 정보 없음 (권한 부족 가능)"
   elif echo "$block" | jq -e '.BlockPublicAcls and .IgnorePublicAcls and .BlockPublicPolicy and .RestrictPublicBuckets' >/dev/null; then
@@ -101,19 +88,11 @@ check_bucket_config() {
   else
     warn "퍼블릭 차단 설정 일부 누락"
   fi
-
-  local raw_policy=$(aws s3api get-bucket-policy --bucket "$BUCKET_NAME" --query 'Policy' --output text 2>/dev/null || echo "")
-  if [ -z "$raw_policy" ]; then
-    error "버킷 정책 없음 (OAC 확인 불가)"
-    return
-  fi
-  local expect_arn="arn:aws:cloudfront::${ACCOUNT_ID}:distribution/${DIST_ID}"
-  echo "$raw_policy" | jq -e --arg OAC_ARN "$expect_arn" '
-    fromjson | .Statement[]
-    | select(.Principal.Service == "cloudfront.amazonaws.com")
-    | select(.Action == "s3:GetObject")
-    | select(.Condition.StringEquals."AWS:SourceArn" == $OAC_ARN)
-  ' >/dev/null && success "OAC 정책 존재" || error "OAC 정책 누락/불일치"
+  policy=$(aws s3api get-bucket-policy --bucket "$BUCKET_NAME" --query 'Policy' --output text 2>/dev/null || echo "")
+  [[ -z "$policy" ]] && error "버킷 정책 없음 (OAC 확인 불가)" && return
+  expect_arn="arn:aws:cloudfront::${ACCOUNT_ID}:distribution/${DIST_ID}"
+  echo "$policy" | jq -e --arg OAC_ARN "$expect_arn" 'fromjson | .Statement[] | select(.Principal.Service == "cloudfront.amazonaws.com") | select(.Action == "s3:GetObject") | select(.Condition.StringEquals."AWS:SourceArn" == $OAC_ARN)' >/dev/null \
+    && success "OAC 정책 존재" || error "OAC 정책 누락/불일치"
 }
 
 check_eks_config() {
@@ -164,13 +143,39 @@ check_iam_config() {
 check_account_s3_block() {
   header "계정 전체 S3 퍼블릭 차단 확인"
   config=$(aws s3control get-public-access-block --account-id "$ACCOUNT_ID" --query 'PublicAccessBlockConfiguration' --output json 2>/dev/null)
-  if [ -z "$config" ]; then
-    warn "계정 수준 퍼블릭 차단 정책 없음"
+  if [ -z "$config" ]; then warn "계정 수준 퍼블릭 차단 정책 없음"
   elif echo "$config" | jq -e '.BlockPublicAcls and .IgnorePublicAcls and .BlockPublicPolicy and .RestrictPublicBuckets' >/dev/null; then
     success "계정 전체 S3 퍼블릭 차단 정책 설정됨"
-  else
-    warn "퍼블릭 차단 설정 일부 누락"
-  fi
+  else warn "퍼블릭 차단 설정 일부 누락"; fi
+}
+
+summarize() {
+  local file="daily_security_report.txt"
+  > "$file"
+  {
+    echo "AWS Security Compliance Check Summary"
+    echo "Scan Date: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+    echo
+    echo "== 결과 요약 =="
+    echo "- 전체 검사 수: $((ERROR_COUNT + WARN_COUNT + SUCCESS_COUNT))"
+    echo "- 실패: $ERROR_COUNT"
+    echo "- 경고: $WARN_COUNT"
+    echo "- 통과: $SUCCESS_COUNT"
+    echo
+
+    echo "== 중요 이슈 =="
+    if [ "$ERROR_COUNT" -eq 0 ]; then echo "없음"; else for e in "${ERROR_MESSAGES[@]}"; do echo "- $e"; done; fi
+    echo
+
+    echo "== 경고 사항 =="
+    if [ "$WARN_COUNT" -eq 0 ]; then echo "없음"; else for w in "${WARN_MESSAGES[@]}"; do echo "- $w"; done; fi
+  } >> "$file"
+  echo "📄 리포트 생성됨: $file"
+}
+
+# ⚠️ Slack 알림 (임시 주석 처리)
+send_slack_notification() {
+  return
 }
 
 main() {
@@ -188,9 +193,9 @@ main() {
   check_iam_config
   check_account_s3_block
 
-  echo -e "\\n📊 점검 요약:"
-  [ ${#FAILURES[@]} -eq 0 ] && echo "✅ 모든 항목 통과" || for f in "${FAILURES[@]}"; do echo "❌ $f"; done
+  summarize
 
+  [ "$ERROR_COUNT" -eq 0 ] || exit 1
 }
 
 main "$@"
