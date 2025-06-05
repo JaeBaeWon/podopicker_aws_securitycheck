@@ -178,19 +178,21 @@ send_slack_notification() {
 }
 
 main() {
-  check_dependencies
-  check_aws
-  test_cf_access
-  check_cf_config
-  check_bucket
-  test_s3_access
-  test_header_attacks
-  check_bucket_config
-  check_eks_config
-  check_ec2_config
-  check_alb_config
-  check_iam_config
-  check_account_s3_block
+  {
+    check_dependencies
+    check_aws
+    test_cf_access
+    check_cf_config
+    check_bucket
+    test_s3_access
+    test_header_attacks
+    check_bucket_config
+    check_eks_config
+    check_ec2_config
+    check_alb_config
+    check_iam_config
+    check_account_s3_block
+  } || true  # 중간 오류 무시
 
   summarize
   return 0
