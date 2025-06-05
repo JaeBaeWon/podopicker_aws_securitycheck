@@ -1,0 +1,66 @@
+name: 🔐 Daily AWS Security Check
+
+on:
+  schedule:
+    - cron: '0 23 * * *'  # 매일 KST 오전 8시
+  workflow_dispatch:      # 수동 실행도 가능
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+
+    env:
+      BUCKET_NAME: podopicker-web-s3
+      CF_URL: https://www.podopicker.store
+      DIST_ID: EKBBK4D1CTWHQ
+      ACCOUNT_ID: 639965457439
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4.1.0
+        with:
+          role-to-assume: arn:aws:iam::639965457439:role/github-audit-role
+          aws-region: ap-northeast-2
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+
+      - name: Run security audit script
+        run: |
+          chmod +x ./scripts/aws_security_check.sh
+          ./scripts/aws_security_check.sh
+
+      - name: 📖 Read report for email
+        id: readfile
+        run: |
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          cat daily_security_report.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: 📬 Send Daily Email Report
+        uses: dawidd6/action-send-mail@v5
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "📬 PoDoPicker AWS 보안 점검 리포트"
+          to: jinhyunpark929@gmail.com
+          from: "PoDoPicker Bot <${{ secrets.EMAIL_USERNAME }}>"
+          content_type: text/plain
+          body: |
+            ${{ steps.readfile.outputs.content }}
+
+      # 🔕 Slack 알림은 추후 메일 확인 후 주석 해제 예정
+      # - name: 🚨 Send Slack Notification (disabled)
+      #   run: |
+      #     echo "Slack 알림은 현재 비활성화됨"
