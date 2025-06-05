@@ -173,7 +173,6 @@ summarize() {
   echo "📄 리포트 생성됨: $file"
 }
 
-# ⚠️ Slack 알림 (임시 주석 처리)
 send_slack_notification() {
   return
 }
