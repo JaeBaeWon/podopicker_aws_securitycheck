@@ -42,9 +42,11 @@ jobs:
       - name: 📖 Read report for email
         id: readfile
         run: |
-          echo "content<<EOF" >> $GITHUB_OUTPUT
-          cat daily_security_report.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "content<<EOF"
+            cat daily_security_report.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: 📬 Send Daily Email Report
         uses: dawidd6/action-send-mail@v5
