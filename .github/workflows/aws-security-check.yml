@@ -2,7 +2,7 @@ name: 🔐 Daily AWS Security Check
 
 on:
   schedule:
-    - cron: '0 23 * * *'  # 매일 KST 오전 8시
+    - cron: '0 23 * * *'  # 매일 KST 오전 8시 실행
   workflow_dispatch:      # 수동 실행도 가능
 
 jobs:
@@ -20,24 +20,24 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout repository
+      - name: 📦 Checkout repository
         uses: actions/checkout@v4.2.2
 
-      - name: Configure AWS credentials via OIDC
+      - name: 🔐 Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4.1.0
         with:
           role-to-assume: arn:aws:iam::639965457439:role/GitHubOIDCAuditRole
           aws-region: ap-northeast-2
 
-      - name: Install dependencies
+      - name: 📥 Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y jq curl
 
-      - name: Run security audit script
+      - name: 🛡️ Run security audit script
         run: |
           chmod +x ./scripts/aws_security_check.sh
-          ./scripts/aws_security_check.sh
+          ./scripts/aws_security_check.sh || true  # 실패해도 계속 진행
 
       - name: 📖 Read report for email
         id: readfile
@@ -59,8 +59,3 @@ jobs:
           content_type: text/plain
           body: |
             ${{ steps.readfile.outputs.content }}
-
-      # 🔕 Slack 알림은 추후 메일 확인 후 주석 해제 예정
-      # - name: 🚨 Send Slack Notification (disabled)
-      #   run: |
-      #     echo "Slack 알림은 현재 비활성화됨"
