@@ -2,7 +2,7 @@ name: 🔐 Daily AWS Security Check
 
 on:
   schedule:
-    - cron: '0 23 * * *'  # 매일 KST 오전 8시 실행
+    - cron: '0 23 * * *'  # 매일 KST 오전 8시
   workflow_dispatch:      # 수동 실행도 가능
 
 jobs:
@@ -20,33 +20,37 @@ jobs:
       contents: read
 
     steps:
-      - name: 📦 Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v4.2.2
 
-      - name: 🔐 Configure AWS credentials via OIDC
+      - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4.1.0
         with:
           role-to-assume: arn:aws:iam::639965457439:role/GitHubOIDCAuditRole
           aws-region: ap-northeast-2
 
-      - name: 📥 Install dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y jq curl
 
-      - name: 🛡️ Run security audit script
+      - name: Run security audit script
         run: |
           chmod +x ./scripts/aws_security_check.sh
-          ./scripts/aws_security_check.sh || true
+          ./scripts/aws_security_check.sh || echo "⚠️ 보안 스크립트 오류 감지됨 (무시하고 계속 진행)"
 
       - name: 📖 Read report for email
         id: readfile
         run: |
-          {
-            echo "content<<EOF"
-            cat daily_security_report.txt
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          if [ -f daily_security_report.txt ]; then
+            {
+              echo "content<<EOF"
+              cat daily_security_report.txt
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "content=리포트 파일이 생성되지 않았습니다." >> "$GITHUB_OUTPUT"
+          fi
 
       - name: 📬 Send Daily Email Report
         uses: dawidd6/action-send-mail@v5
@@ -55,9 +59,10 @@ jobs:
           server_port: 587
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "📬 PoDoPicker AWS 보안 점검 리포트"
+          subject: "📬 PoDoPicker 보안 점검 리포트"
           to: jinhyunpark929@gmail.com
           from: "PoDoPicker Bot <${{ secrets.EMAIL_USERNAME }}>"
           content_type: text/plain
           body: |
             ${{ steps.readfile.outputs.content }}
+
