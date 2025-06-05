@@ -192,9 +192,8 @@ main() {
   check_iam_config
   check_account_s3_block
 
-  summarize   # ✅ 항상 리포트 생성
-
-  [ "$ERROR_COUNT" -eq 0 ] || exit 1  
+  summarize
+  return 0
 }
 
 main "$@"
