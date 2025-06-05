@@ -37,7 +37,7 @@ jobs:
       - name: 🛡️ Run security audit script
         run: |
           chmod +x ./scripts/aws_security_check.sh
-          ./scripts/aws_security_check.sh || true  # 실패해도 계속 진행
+          ./scripts/aws_security_check.sh || true
 
       - name: 📖 Read report for email
         id: readfile
