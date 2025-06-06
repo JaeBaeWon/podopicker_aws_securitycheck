@@ -60,7 +60,7 @@ jobs:
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: "📬 PoDoPicker 보안 점검 리포트"
-          to: jinhyunpark929@gmail.com
+          to: jinhyunpark929@gmail.com, lee656859@gmail.com, kchaklkb@naver.com, fgh2585@soongsil.ac.kr, infrontof111@gmail.com
           from: "PoDoPicker Bot <${{ secrets.EMAIL_USERNAME }}>"
           content_type: text/plain
           body: |
