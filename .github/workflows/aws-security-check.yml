@@ -2,8 +2,7 @@ name: 🔐 Daily AWS Security Check
 
 on:
   schedule:
-    - cron: '0 23 * * *'  # 매일 KST 오전 8시
-  workflow_dispatch:      # 수동 실행도 가능
+  workflow_dispatch:
 
 jobs:
   security-audit:
